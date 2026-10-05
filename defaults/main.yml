@@ -1,0 +1,22 @@
+---
+# Install logrotate, manage its global defaults and its timer.
+log_retention_logrotate_enabled: true
+
+# Global defaults written to /etc/logrotate.conf. A rule in /etc/logrotate.d overrides them for its own files.
+# Frequency is one of hourly, daily, weekly, monthly or yearly.
+log_retention_logrotate_frequency: "daily"
+
+# Number of rotated files kept by the global defaults: with a daily frequency, the days of local history.
+log_retention_logrotate_rotate: 7
+
+# Compress rotated files with gzip. The newest rotated file stays uncompressed for one cycle (delaycompress), so a
+# process that still writes to it after rotation does not corrupt the archive.
+log_retention_logrotate_compress: true
+
+# Rules written to /etc/logrotate.d/<name>. A rule named like a packaged file (for example nginx) replaces it.
+# See README.md for the supported keys.
+log_retention_logrotate_rules: []
+
+# When logrotate runs, as a systemd calendar expression. Rules with maxsize need a run more frequent than their
+# frequency to be checked, for example hourly.
+log_retention_logrotate_timer_on_calendar: "daily"

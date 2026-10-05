@@ -1,0 +1,21 @@
+---
+# Validate public role inputs and host prerequisites before making changes.
+- name: "Run validation tasks"
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - role-log-retention-validate
+  tags:
+    - role-log-retention-validate
+
+# Install logrotate, write its global defaults and rules, and set when its timer runs.
+- name: "Run logrotate tasks"
+  ansible.builtin.include_tasks:
+    file: logrotate.yml
+    apply:
+      tags:
+        - role-log-retention-logrotate
+  when: log_retention_logrotate_enabled
+  tags:
+    - role-log-retention-logrotate

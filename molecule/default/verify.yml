@@ -1,0 +1,121 @@
+---
+- name: "Verify"
+  hosts: all
+  become: true
+  tasks:
+    - name: "Collect installed packages"
+      ansible.builtin.package_facts:
+        manager: "apt"
+
+    - name: "Assert logrotate is installed"
+      ansible.builtin.assert:
+        that:
+          - "'logrotate' in ansible_facts.packages"
+        fail_msg: "The logrotate package is not installed."
+
+    - name: "Read logrotate global defaults"
+      ansible.builtin.slurp:
+        src: "/etc/logrotate.conf"
+      register: _log_retention_global_conf
+
+    - name: "Assert global defaults are applied"
+      vars:
+        _content: "{{ _log_retention_global_conf.content | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - _content is search('(?m)^daily$')
+          - _content is search('(?m)^rotate 5$')
+          - _content is search('(?m)^compress$')
+          - _content is search('(?m)^delaycompress$')
+          - _content is search('(?m)^include /etc/logrotate.d$')
+          - >-
+            (ansible_facts['distribution'] == 'Ubuntu' and _content is search('(?m)^su root adm$'))
+            or (ansible_facts['distribution'] != 'Ubuntu' and _content is not search('(?m)^su '))
+        fail_msg: "/etc/logrotate.conf does not hold the expected global defaults."
+
+    - name: "Read molecule-app rule"
+      ansible.builtin.slurp:
+        src: "/etc/logrotate.d/molecule-app"
+      register: _log_retention_app_rule
+
+    - name: "Assert molecule-app rule holds its options"
+      vars:
+        _content: "{{ _log_retention_app_rule.content | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - _content is search('/var/log/molecule/\*\.log \{')
+          - _content is search('rotate 3')
+          - _content is search('maxsize 50M')
+          - _content is search('create 0640 root adm')
+          - _content is search('sharedscripts')
+          - _content is search('touch /var/log/molecule/postrotate-ran')
+        fail_msg: "/etc/logrotate.d/molecule-app does not hold the expected options."
+
+    - name: "Collect legacy rule"
+      ansible.builtin.stat:
+        path: "/etc/logrotate.d/legacy"
+      register: _log_retention_legacy_rule
+
+    - name: "Assert absent rule is removed"
+      ansible.builtin.assert:
+        that:
+          - not _log_retention_legacy_rule.stat.exists
+        fail_msg: "/etc/logrotate.d/legacy should have been removed."
+
+    - name: "Read logrotate timer schedule"
+      ansible.builtin.command:
+        cmd: "systemctl show logrotate.timer --property=TimersCalendar"
+      register: _log_retention_timer_calendar
+      changed_when: false
+
+    - name: "Collect logrotate timer state"
+      ansible.builtin.systemd:
+        name: "logrotate.timer"
+      register: _log_retention_timer
+
+    - name: "Assert logrotate timer is enabled, active and hourly"
+      ansible.builtin.assert:
+        that:
+          - _log_retention_timer.status.UnitFileState == "enabled"
+          - _log_retention_timer.status.ActiveState == "active"
+          - _log_retention_timer_calendar.stdout is search('OnCalendar=\*-\*-\* \*:00:00')
+          - _log_retention_timer_calendar.stdout | regex_findall('OnCalendar=') | length == 1
+        fail_msg: >-
+          logrotate.timer must be enabled, active and run hourly only.
+          Current schedule: {{ _log_retention_timer_calendar.stdout }}
+
+    # Forced runs check that the rule really rotates, recreates and compresses files.
+    - name: "Rotate application logs twice"
+      ansible.builtin.shell:
+        cmd: >-
+          logrotate --force /etc/logrotate.d/molecule-app
+          && echo "second line" > /var/log/molecule/app.log
+          && logrotate --force /etc/logrotate.d/molecule-app
+      changed_when: true
+
+    - name: "Collect rotated files"
+      ansible.builtin.stat:
+        path: "{{ _log_retention_rotated }}"
+      loop:
+        - "/var/log/molecule/app.log"
+        - "/var/log/molecule/app.log.1"
+        - "/var/log/molecule/app.log.2.gz"
+        - "/var/log/molecule/postrotate-ran"
+      loop_control:
+        loop_var: _log_retention_rotated
+      register: _log_retention_rotated_files
+
+    - name: "Assert logs were rotated, recreated and compressed"
+      vars:
+        _files: "{{ _log_retention_rotated_files.results | items2dict(key_name='_log_retention_rotated', value_name='stat') }}"
+      ansible.builtin.assert:
+        that:
+          - _files['/var/log/molecule/app.log'].exists
+          - _files['/var/log/molecule/app.log'].mode == '0640'
+          - _files['/var/log/molecule/app.log'].gr_name == 'adm'
+          - _files['/var/log/molecule/app.log.1'].exists
+          - _files['/var/log/molecule/app.log.2.gz'].exists
+          - _files['/var/log/molecule/postrotate-ran'].exists
+        fail_msg: >-
+          After two forced rotations, app.log must be recreated as 0640 root:adm, app.log.1 kept uncompressed
+          (delaycompress), app.log.2.gz compressed, and the postrotate script run.

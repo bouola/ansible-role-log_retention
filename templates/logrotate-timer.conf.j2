@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+[Timer]
+# An empty OnCalendar= clears the schedule shipped by the package before setting ours.
+OnCalendar=
+OnCalendar={{ log_retention_logrotate_timer_on_calendar }}

@@ -1,0 +1,75 @@
+---
+- name: "Validate supported operating system"
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] in _log_retention_logrotate_su_by_distribution
+    fail_msg: >-
+      This role supports Debian and Ubuntu only.
+      Current distribution is {{ ansible_facts["distribution"] | default('<undefined>') }}.
+
+- name: "Validate logrotate settings"
+  ansible.builtin.assert:
+    that:
+      - log_retention_logrotate_enabled is boolean
+      - log_retention_logrotate_frequency in _log_retention_logrotate_frequencies
+      - log_retention_logrotate_rotate is integer and log_retention_logrotate_rotate >= 0
+      - log_retention_logrotate_compress is boolean
+      - log_retention_logrotate_rules is sequence and log_retention_logrotate_rules is not string
+      - log_retention_logrotate_timer_on_calendar is string and log_retention_logrotate_timer_on_calendar | length > 0
+    fail_msg: >-
+      Invalid logrotate settings. enabled and compress must be booleans, frequency must be one of
+      {{ _log_retention_logrotate_frequencies | join(', ') }}, rotate must be an integer >= 0,
+      rules must be a list, and timer_on_calendar must be a systemd calendar expression.
+
+- name: "Validate logrotate rules"
+  ansible.builtin.assert:
+    that:
+      - _log_retention_logrotate_rule.name is string
+      - _log_retention_logrotate_rule.name is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+      - _log_retention_logrotate_rule.state | default('present') in ['present', 'absent']
+      - >-
+        _log_retention_logrotate_rule.state | default('present') == 'absent'
+        or (_log_retention_logrotate_rule.paths is sequence and _log_retention_logrotate_rule.paths is not string
+        and _log_retention_logrotate_rule.paths | length > 0
+        and _log_retention_logrotate_rule.paths | reject('match', '^/') | list | length == 0)
+      - _log_retention_logrotate_rule.frequency | default('daily') in _log_retention_logrotate_frequencies
+      - _log_retention_logrotate_rule.rotate | default(0) is integer
+      - _log_retention_logrotate_rule.rotate | default(0) >= 0
+      - _log_retention_logrotate_rule.maxsize | default('1M') | string is match('^[0-9]+[kMG]?$')
+      - _log_retention_logrotate_rule.compress | default(true) is boolean
+      - _log_retention_logrotate_rule.missingok | default(true) is boolean
+      - _log_retention_logrotate_rule.notifempty | default(true) is boolean
+      - _log_retention_logrotate_rule.dateext | default(false) is boolean
+      - _log_retention_logrotate_rule.copytruncate | default(false) is boolean
+    fail_msg: >-
+      Logrotate rule {{ _log_retention_logrotate_rule.name | default('<missing name>') }} is invalid.
+      name must be a file name (letters, digits, dot, dash, underscore), state must be present or absent,
+      a present rule needs a non-empty list of absolute paths, frequency must be one of
+      {{ _log_retention_logrotate_frequencies | join(', ') }}, rotate must be an integer >= 0,
+      maxsize must look like 100k, 50M or 1G, and compress, missingok, notifempty, dateext and copytruncate
+      must be booleans.
+  loop: "{{ log_retention_logrotate_rules }}"
+  loop_control:
+    loop_var: _log_retention_logrotate_rule
+    label: "{{ _log_retention_logrotate_rule.name | default('<missing name>') }}"
+
+- name: "Validate logrotate rule names are unique"
+  ansible.builtin.assert:
+    that:
+      - >-
+        log_retention_logrotate_rules | map(attribute='name') | list | length
+        == log_retention_logrotate_rules | map(attribute='name') | unique | list | length
+    fail_msg: >-
+      Logrotate rule names must be unique. Current names:
+      {{ log_retention_logrotate_rules | map(attribute='name') | join(', ') }}.
+
+# systemd-analyze reports the same errors systemd would, so an invalid schedule fails here, not at runtime.
+- name: "Validate logrotate timer schedule"
+  ansible.builtin.command:
+    argv:
+      - systemd-analyze
+      - calendar
+      - "{{ log_retention_logrotate_timer_on_calendar }}"
+  changed_when: false
+  check_mode: false
+  when: log_retention_logrotate_enabled

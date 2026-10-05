@@ -1,0 +1,38 @@
+---
+- name: "Prepare"
+  hosts: all
+  become: true
+  tasks:
+    - name: "Create application log directory"
+      ansible.builtin.file:
+        path: "/var/log/molecule"
+        state: directory
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    # notifempty skips empty files, so the log needs content to be rotated.
+    - name: "Create application logs"
+      ansible.builtin.copy:
+        dest: "/var/log/molecule/{{ _log_retention_log }}"
+        content: "molecule log line\n"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      loop:
+        - "app.log"
+        - "worker.log"
+      loop_control:
+        loop_var: _log_retention_log
+
+    # A leftover rule declared absent must be removed by the role.
+    - name: "Create legacy logrotate rule"
+      ansible.builtin.copy:
+        dest: "/etc/logrotate.d/legacy"
+        content: |
+          /var/log/legacy.log {
+                  missingok
+          }
+        owner: "root"
+        group: "root"
+        mode: "0644"
