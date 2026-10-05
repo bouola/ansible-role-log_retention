@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+# Global defaults. Options apply to the rules included after them; a rule's own options take precedence.
+
+{{ log_retention_logrotate_frequency }}
+rotate {{ log_retention_logrotate_rotate }}
+create
+{% if log_retention_logrotate_compress %}
+compress
+delaycompress
+{% endif %}
+{% if _log_retention_logrotate_su | length > 0 %}
+su {{ _log_retention_logrotate_su }}
+{% endif %}
+
+include /etc/logrotate.d

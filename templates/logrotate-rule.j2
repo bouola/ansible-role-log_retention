@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+{% set rule = _log_retention_logrotate_rule %}
+{{ rule.paths | join(' ') }} {
+{% if rule.frequency is defined %}
+	{{ rule.frequency }}
+{% endif %}
+{% if rule.rotate is defined %}
+	rotate {{ rule.rotate }}
+{% endif %}
+{% if rule.maxsize is defined %}
+	maxsize {{ rule.maxsize }}
+{% endif %}
+{% if rule.compress | default(log_retention_logrotate_compress) %}
+	compress
+	delaycompress
+{% else %}
+	nocompress
+{% endif %}
+{% if rule.missingok | default(true) %}
+	missingok
+{% endif %}
+{% if rule.notifempty | default(true) %}
+	notifempty
+{% endif %}
+{% if rule.dateext | default(false) %}
+	dateext
+{% endif %}
+{% if rule.copytruncate | default(false) %}
+	copytruncate
+{% elif rule.create is defined %}
+	create {{ rule.create }}
+{% endif %}
+{% if rule.su is defined %}
+	su {{ rule.su }}
+{% endif %}
+{% if rule.prerotate is defined or rule.postrotate is defined %}
+	sharedscripts
+{% endif %}
+{% if rule.prerotate is defined %}
+	prerotate
+{{ rule.prerotate | trim | indent(8, first=true) }}
+	endscript
+{% endif %}
+{% if rule.postrotate is defined %}
+	postrotate
+{{ rule.postrotate | trim | indent(8, first=true) }}
+	endscript
+{% endif %}
+}

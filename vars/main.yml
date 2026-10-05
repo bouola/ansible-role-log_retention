@@ -1,0 +1,13 @@
+---
+# Global "su" directive of /etc/logrotate.conf, as each distribution ships it. Ubuntu rotates as root:adm because
+# its /var/log is group-writable by syslog; Debian sets none.
+_log_retention_logrotate_su_by_distribution:
+  Debian: ""
+  Ubuntu: "root adm"
+
+_log_retention_logrotate_frequencies:
+  - "hourly"
+  - "daily"
+  - "weekly"
+  - "monthly"
+  - "yearly"

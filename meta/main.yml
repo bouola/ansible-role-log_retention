@@ -1,0 +1,24 @@
+---
+galaxy_info:
+  role_name: "log_retention"
+  namespace: "bouola"
+  description: "Bound local log retention with logrotate, journald and Docker log limits"
+  author: "bouola"
+  license: "MIT"
+  min_ansible_version: "2.15"
+  galaxy_tags:
+    - "logrotate"
+    - "logging"
+    - "retention"
+    - "journald"
+    - "docker"
+    - "system"
+  platforms:
+    - name: "Debian"
+      versions:
+        - "bookworm"
+        - "trixie"
+    - name: "Ubuntu"
+      versions:
+        - "jammy"
+        - "noble"

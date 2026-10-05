@@ -1,0 +1,22 @@
+---
+- name: "Converge"
+  hosts: all
+  become: true
+  vars:
+    log_retention_logrotate_rotate: 5
+    log_retention_logrotate_timer_on_calendar: "hourly"
+    log_retention_logrotate_rules:
+      - name: "molecule-app"
+        paths:
+          - "/var/log/molecule/*.log"
+        frequency: "daily"
+        rotate: 3
+        maxsize: "50M"
+        create: "0640 root adm"
+        postrotate: |
+          touch /var/log/molecule/postrotate-ran
+      - name: "legacy"
+        state: "absent"
+
+  roles:
+    - role: "bouola.log_retention"
